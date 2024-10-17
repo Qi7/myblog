@@ -1,0 +1,11 @@
+---
+title: "Welcome To My Blog"
+author: "Qi Wang"
+date: "2024-10-16"
+categories: [news]
+---
+
+I am a data scientist who is learning how to blog using Quarto. Thank you, the quarto team!
+
+![](celebrate.png)
+
