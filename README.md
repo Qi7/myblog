@@ -1,1 +1,1 @@
-My journey to learn blogging with quarto.
+My journey to learn blogging with Quarto.
