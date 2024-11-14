@@ -1,6 +1,8 @@
 ---
-title: "How to Monitor a Credit Business"
+title: "Monitoring a Credit Business"
 author: "Qi Wang"
+date: last-modified
+categories: ["credit risk", "monitoring"]
 format: 
   html:
     mermaid:
@@ -12,262 +14,39 @@ execute:
   cache: false
   freeze: auto
 toc: true
+toc-depth: 3
 number-sections: true
 ---
 
+
 ## Data Generating Process
 
-The first thing when starting analyzing some data from one specific domain, is to know the data generating process. That is why we need to have some domain knowledge or seek help from the subject matter experts. Lending and borrowing are very commaon activities in daily life. To better understand what kind of data we are going to deal with, I drew a diagram to show the simplified data generating process.
+The first thing when starting analyzing data from one specific domain, is to know the data generating process. That is why we need to have domain knowledge or seek help from subject matter experts. Lending and borrowing are very common activities in daily life and business world. To better understand what kind of data we are going to deal with, I drew a diagram to show a simplified data generating process in @fig-DGP.
 
-![Simplified Data Genrating Process](DGP.svg){width=80%}
+![Simplified Data Genrating Process](DGP.svg){width=80% .lightbox .border #fig-DGP}
 
-During the application, applicants features like demographic characteristics and socioeconomic characteristics and other relevant data are used to evaluate their creditworthiness. Disqualified applicants will be rejecter. For those accepted applicants, a price (interest rate) and credit line amount will be assigned to them. After becoming a client with some credits, they can use the credit according to the agreement between the bank and the clients. But basically, we can observe two types of actions, borrowing and paying back.
+During application, applicants features like demographic characteristics, socioeconomic characteristics and other relevant data are used to evaluate their creditworthiness. Disqualified applicants will be rejecter. For those accepted applicants, a price (interest rate) and credit line amount will be assigned to them. After becoming a client with credits, they can use the them according to the agreement between the bank and the clients. But most commonly, we observe and record two types of actions, borrowing and paying back.
 
-```{mermaid}
+For those rejected clients, we will never know their counter factual behaviour if they get the credit. They only appear in the data analysis of the application process, maily the rejection rates of the current application strategy, the distributions of the triggered rejected reasons, etc.
 
----
-title: 流程和数据
----
 
+## Monitor the Application Process
 
-
-   
-
-flowchart LR
-
-
-    classDef db fill:#F5B461, stroke:#333,stroke-width:2px
-    
-    subgraph 授信
- 
-        direction TB  
-        id9([申请客户]) --> 授信申请
-        id7((A卡分)) --- 授信申请 
-    end 
-    
-    subgraph 用信
-        direction TB
-        id10([通过客户]) --> 用信申请
-        id8((B卡分)) --- 用信申请
-    end 
-    
-    subgraph 借据
-        direction TB
-        借据开立 --> 还款表现
-        借据开立 -.-> id3[(借据信息)]:::db
-
-        借据开立 -.-> id4[(用信客户)]:::db
-
-        还款表现 -.-> id5[(借据状态)]:::db
-
-        还款表现 -.-> id6[(核销借据)]:::db
-    end 
-    
-    授信 ----> |申请通过| 用信
-    用信 ---> |申请通过| 借据
-    授信 ----> |申请通过| 借据
-
-    用信申请 -.-> id1[(申请结果)]:::db
-    授信申请 -.-> id1
-
-    id7 -.-> id2[(模型分)]:::db
-    id8 -.-> id2
-```
-
-
-可以以业务时序来进行监控计划
-
-1.  进件
-
--   通过 or 拒绝
--   拒绝原因
--   授信利率、额度
-
-2.  用信
-
--   用信概率
--   额度使用率
-
-3.  还款表现
-
--   坏客户率
--   vintage
--   滚动率
-
-4 模型（如有） 
-
-- 模型效果（KS, AUC)
-
-## 业务监控
-
-### 余额金字塔
-
-借鉴人口金字塔，对各个账龄的余额进行监控。
-
--   健康的业务应该有类似三角形的图形。
--   萎缩的业务会呈现倒金字塔形。
-
-**TODO：可以加入选择某两个cohort进行对比的功能**
-
-![人口演进](https://user-images.githubusercontent.com/68678549/103846423-02cc4980-50d9-11eb-8c31-964d5cc1f7b8.png)
-
-```{r pyramid}
-library(plotly)
-library(tidyverse)
-library(ggplot2)
-library(showtext)
-showtext_auto()
-
-balance_age <- 0:19
-
-
-generate_cohorts <- function(start = "2021-01", end = "2021-12"){
-  # Generate a sequence of year months
-start_date <- ym(start)
-end_date <- ym(end)
-months <- seq.Date(start_date, end_date, by = "1 month")
-
-# Format the sequence as year-month
-cohorts <- format(months, "%Y-%m")
-return(cohorts)
-  
-}
-
-cohorts = generate_cohorts()
-
-data = cohorts %>% map(~tibble(cohort = .x, 
-                        age = balance_age, 
-                        balance = (20-balance_age)/20 * runif(1, min = 10, max = 100) + rnorm(20, 2, 1))) %>% bind_rows()
-
-
-# Creating a sample dataset
-# data <- data.frame(
-#   Age = c(0:19, 0:19),
-#   temp = c(rep("A", 20), rep("B", 20)),
-#   balance = c(seq(from = 10000, to = 100, length.out = 20), 
-#                  seq(from = 10000, to = 100, length.out = 20))
-# )
-plot_data <- data |> filter(cohort %in% c('2021-01', '2021-02'))
-# Create a basic bar chart for one gender
-basic_plot <-  ggplot(
-    plot_data, 
-    aes(
-        x = age, 
-        fill = cohort, 
-        y = ifelse(
-            test = cohort == '2021-01', 
-            yes = - balance, 
-            no = balance
-            ),
-        text = paste0('放款时间：', cohort, '\n账龄：', age, '月\n余额：', round(balance), '亿')
-        )
-    ) + 
-geom_bar(stat = "identity") 
-
-# Create population pyramids for both genders and combine them
-balance_pyramid <- basic_plot +
-  scale_y_continuous(
-    labels = abs, 
-    limits = max(plot_data$balance) * c(-1,1)
-  ) + 
-  coord_flip() + 
-  theme_minimal() +
-  labs(
-    x = "账龄", 
-    y = "余额（亿）", 
-    title = "余额金字塔"
-  )
-
-ggplotly(balance_pyramid +  guides(fill="none"), tooltip = "text")
-```
-
-```{r}
-fig <- data %>% 
-  filter(cohort %in% c('2021-01', '2021-02')) %>% 
-  plot_ly(x = ~age, y = ~balance, color = ~cohort, type='bar') %>% 
-  layout(yaxis = list(barmode = 'stacked', type = "log"))
-
-fig
-```
-
-
-
-## cohort vintage （balance, balance/lending amount）
-
-```{r tanh}
-gen_vintage_data <- function(cohort_name){
-  age <- seq(0, 100)
-  vintage <- tanh(age/10)*runif(1, 0.01, 0.07)
-
-  df = data.frame(cohort = cohort_name, age = age, default_rate = vintage)
-  return(df)
-}
-
-df <- purrr::map_df(sample(letters, 3), gen_vintage_data) %>% rbind()
-
-vintage_plot <- ggplot(data=df) +
-  geom_line(aes(x=age, y=default_rate, col=cohort)) + 
-  theme_minimal()
-
-ggplotly(vintage_plot)
-
-```
-
-## 迁移率
-
-这一部分可以理解为状态的切换
-
-$state_0=逾期$、$state_1=正常$，$duration$为逾期的时长。
-
-- 可能随着逾期时间的增长，资金或者客户在逾期状态的概率会越来越大；
-- 在逾期的初始阶段，客户自行还款，转为正常状态的概率较大；
-
-```{r migration_rate}
-n <- length(cohorts)
-df_mig <- tibble(cohort = cohorts
-      , c_m1 = pmax(0, rnorm(n, 0.05, 0.02))
-       , m1_m2 = pmax(0, rnorm(n, 0.3, 0.05))
-       , m2_m3 = pmax(0, rnorm(n, 0.8, 0.1))
-       , m3_m4 = pmax(0, rnorm(n, 0.9, 0.05))
-       , m4_m5 = pmax(0, rnorm(n, 0.95, 0.05))
-       , m5_m6 = pmax(0, rnorm(n, 0.99, 0.03))
-       )
-
-library(plotly)
-
-fig <- plot_ly(x = colnames(df_mig)[-1],y =  df_mig$cohort, 
-               z= as.matrix(df_mig %>% select(-cohort)), type= "heatmap")
-
-
-fig
-```
-```{r}
-df_mig_long <- df_mig %>% pivot_longer(cols = -1, names_to = 'migrate_status', values_to = 'value') 
-ojs_define(df_mig = df_mig_long)
-```
-
-```{ojs}
-Plot.plot({
-  color: {legend: true}, 
-  marks: [
-    Plot.cell(transpose(df_mig), {
-      x: 'cohort',
-      y: 'migrate_status',
-      fill: 'value',
-      tip: true 
-    })
-  ]
-})
-```
-
-## 模型策略相关监控
-
-### 拒绝率
+An overview of the rejection data. The reject process always takes several steps. An applicant might go through several decision engines. In my example, I simulated the data so that it represents a process that the application first goes through the anti-fraud engine, then if passed, they will go through the strategy engine. It can reduce the need to fetch the downstream data for those rejected applicants, hence saving the cost to buy the data. (Yes, data is not free.)
 
 ```{r passrate}
 library(tidyverse)
 library(plotly)
 library(lubridate)
+
+# to set color scales
+options(
+  ggplot2.continuous.colour = "viridis",
+  ggplot2.continuous.fill = "viridis"
+)
+
+scale_colour_discrete = scale_colour_viridis_d
+scale_fill_discrete = scale_fill_viridis_d
 
 # Generate a sequence of year months
 start_date <- ym("2023-01")
@@ -277,87 +56,104 @@ months <- seq.Date(start_date, end_date, by = "1 month")
 # Format the sequence as year-month
 formatted_months <- format(months, "%Y-%m")
 
-result <- as.factor(c('反欺诈被拒', '策略被拒', '通过'))
+result <- as.factor(c("reject-antifraud", "reject-strategy", "pass"))
 
-generate_probabilities <- function(){
-  # Generate random probabilities for a, b, and c
-  prob_a <- runif(1)
-  prob_b <- runif(1)
-  prob_c <- runif(1)
-  
-  # Normalize the probabilities to ensure they add up to 1
-  total_prob <- prob_a + prob_b + prob_c
-  prob_a <- prob_a / total_prob
-  prob_b <- prob_b / total_prob
-  prob_c <- prob_c / total_prob
-  
-  return(sort(c(prob_a, prob_b, prob_c)))
+generate_probabilities <- function() {
+    # Generate random probabilities for a, b, and c
+    prob_a <- runif(1)
+    prob_b <- runif(1)
+    prob_c <- runif(1)
 
+    # Normalize the probabilities to ensure they add up to 1
+    total_prob <- prob_a + prob_b + prob_c
+    prob_a <- prob_a / total_prob
+    prob_b <- prob_b / total_prob
+    prob_c <- prob_c / total_prob
+
+    return(sort(c(prob_a, prob_b, prob_c)))
 }
 
 # Function to generate a dataframe for each item in the vector
 generate_dataframe <- function(item) {
-  data_frame <- data.frame(month = item,
-                           result = sample(result, size = sample(10000:50000, 1), replace = TRUE, prob = generate_probabilities()))
-  return(data_frame)
+    data_frame <- data.frame(
+        month = item,
+        result = sample(result, size = sample(10000:50000, 1), replace = TRUE, prob = generate_probabilities())
+    )
+    return(data_frame)
 }
 
-fig <- formatted_months %>% map_df(generate_dataframe) %>% 
-  bind_rows()
+fig <- formatted_months %>%
+    map_df(generate_dataframe) %>%
+    bind_rows()
 
 fig <- as_tibble(fig)
 
-fig <- fig %>% 
-  mutate(reject_reasons = map(result, ~sample(letters[1:20], size=sample(1:7, 1)
-                                              , prob = c(log(2:11), log(15:6))
-                                              )))
+fig <- fig %>%
+    mutate(reject_reasons = map(result, ~ sample(letters[1:20],
+        size = sample(1:7, 1),
+        prob = c(log(2:11), log(15:6))
+    )))
 
-fig <- fig %>% mutate(reject_reasons = ifelse(result=='通过', list(), reject_reasons))
+fig <- fig %>% mutate(reject_reasons = ifelse(result == "通过", list(), reject_reasons))
 # fig <- ggplot2::diamonds
 
-t_reject_reasons <- fig %>% filter(result!='通过')
+t_reject_reasons <- fig %>% filter(result != "通过")
 
-fig <- plot_ly(x = fig$month
-                       , color = fig$result
-                       , type='histogram', histfunc='sum') %>%
-layout(barmode = "stack", barnorm='percent')
+fig <- plot_ly(
+    x = fig$month,
+    color = fig$result,
+    type = "histogram", 
+    histfunc = "sum",
+    colors = "viridis"
+) %>%
+    layout(
+      barmode = "stack"
+      , barnorm = "percent"
+      , legend = list(orientation = 'h')
+      )
 
 fig
 ```
 
-### 拒绝原因监控
+So when we see the pass rate fluctuate significantly, we may want to zoom in to see the reject reasons for each period.
 
 ```{r reject_reasons}
-t_reject_reason_count <- t_reject_reasons %>% unnest(reject_reasons) %>% group_by(month, reject_reasons) %>% summarise(n=n())
-unique_months = unique(t_reject_reason_count$month)
-max_n = t_reject_reason_count$n %>% max()
-ojs_define(reject_reason=t_reject_reason_count)
-ojs_define(unique_months=unique_months)
+t_reject_reason_count <- t_reject_reasons %>%
+    unnest(reject_reasons) %>%
+    group_by(month, reject_reasons) %>%
+    summarise(n = n())
+unique_months <- unique(t_reject_reason_count$month)
+max_n <- t_reject_reason_count$n %>% max()
+ojs_define(reject_reason = t_reject_reason_count)
+ojs_define(unique_months = unique_months)
 ojs_define(max_n = max_n)
 ```
+
+### Monitor the Reject Reasons
 
 ```{ojs}
 //| echo: false
 //| panel: input
-viewof select_month = Inputs.select(unique_months, {label: "选择月份"})
+viewof select_month = Inputs.select(unique_months, {label: "Select the Month"})
 ```
+
 
 ::: {.panel-tabset}
 
-#### 图
+#### Visualization
 
 ```{ojs}
 Plot.plot({
   y: {domain: [0, max_n], 
-  label: "触发次数"},
-  x: {label: "触发原因"},
+  label: "trigger times"},
+  x: {label: "trigger reasons"},
 
 marks: [
 Plot.barY(filtered_data, {x: "reject_reasons", y: "n", fill: "reject_reasons", sort: {x: "y", limit:10, reverse: true}})]
 })
 ```
 
-#### 数据
+#### Data
 ```{ojs}
 Inputs.table(filtered_data)
 ```
@@ -369,248 +165,120 @@ Inputs.table(filtered_data)
 filtered_data = transpose(reject_reason).filter((d) => d.month === select_month)
 ```
 
+### Model Score Distribution
 
-### 模型分分布（打分客户/通过客户）
-
-```{r}
-df_score <- cohorts %>% map(~tibble(month = .x, 
-                    score = pmax(500, rnorm(1000, mean = sample(600:700, 1), sd = 50)))) %>% bind_rows()
-```
+Another way to check the quality of the incoming clients is to check the distribution of the model score or some important features. Basically, all scores that asess the clients' credit worthiness are just some way to reduce the dimensionality of the features we can get for that person and map them into a one-dimension scalar number. So we can compare two clients simply by ranking their scores. Assuming we have a model that is effective, we can be alarmed earlier whether there is a significant credit worthiness drift in our client base.
 
 
 ```{r violin_plot}
-#| context: server
+library(plotly)
+library(tidyverse)
+library(ggplot2)
+library(showtext)
+showtext_auto()
+
+# simulate some client data to visualize
+balance_age <- 0:19
+
+generate_cohorts <- function(start = "2021-01", end = "2021-12") {
+    # Generate a sequence of year months
+    start_date <- ym(start)
+    end_date <- ym(end)
+    months <- seq.Date(start_date, end_date, by = "1 month")
+
+    # Format the sequence as year-month
+    cohorts <- format(months, "%Y-%m")
+    return(cohorts)
+}
+
+cohorts <- generate_cohorts()
+
+# simulate scores for each month
+df_score <- cohorts %>%
+    map(~ tibble(
+        month = .x,
+        score = pmax(500, rnorm(1000, mean = sample(600:700, 1), sd = 50))
+    )) %>%
+    bind_rows()
 p_boxplot <- ggplot(data = df_score) +
-  geom_boxplot(aes(x=month, y=score, fill = month)) +
-  theme_minimal()
+    geom_boxplot(aes(x = month, y = score, fill = month)) +
+    theme_minimal()
 
 ggplotly(p_boxplot)
 ```
 
+## Monitor Client Behaviour Data
 
-**加入两个分布之间对比，distribution and ks**
+To be continued, I will introduce the main metrics used to assess the health of the credit business, like vintage, rolling rate and so on.
 
-```{r echo=FALSE}
-df_score = bind_rows(df_score, tibble(month='benchmark'
-                                      , score = pmax(500, rnorm(1000, mean = 650, sd = 50))))
-unique_months_score = unique(df_score$month)
+### When to Use the Credit
 
-ojs_define(score=df_score)
-ojs_define(cohorts=unique_months_score)
-```
-
-```{ojs}
-//| echo: false
-//| panel: input
-viewof select = Inputs.select(cohorts, {label: "Select one"})
-```
-
-```{ojs}
-//| echo: false
-filtered_data_score = transpose(score).filter(d => ['benchmark', select].includes(d.month))
-```
-
-:::: {layout="[50, 50]"}
-
-::: {#first-column}
-```{ojs}
-Plot.plot({
-  color: {legend: true, type: "ordinal"},
-  marks: [
-    Plot.rectY(filtered_data_score, Plot.binX({y2: "count"}, {x: "score", fill:'month', mixBlendMode: "multiply", fillOpacity: 0.4})),
-    Plot.ruleY([0])
-  ]
-})
-```
-:::
-
-::: {#second-column}
-```{ojs}
-Plot.plot({
-  marginLeft: 60,
-  y: {grid: true},
-  color: {legend: true,
-         type: "ordinal"}, 
-  marks: [
-        Plot.areaY(filtered_data_score.filter(d => d.month === "benchmark"), Plot.binX({y: "proportion"}, {x: "score", cumulative:1, fill:"month", fillOpacity: 0.4})),
-    Plot.lineY(filtered_data_score.filter(d => d.month != "benchmark"), Plot.binX({y: "proportion"}, {x: "score", cumulative:1, stroke:"month"})),
-    Plot.ruleY([0])
-  ]
-})
-```
-:::
-
-::::
-
-
-
-### 客户用信分析
-
-#### 用信比例
+We give out credit to clients based on their creditworthiness. But not every client is going to use them. We need to monitor the credit utilization rate to see if the business is healthy.
 
 ```{r}
-data_credit_uti <- cohorts %>% map(~tibble(cohort = .x
-                        , applied_clients = rnorm(1, 100000, 10000)
-                        , utilize_prop = min(rnorm(1, 0.6, 0.1), 1)
-                        , utilize_client = round(utilize_prop * applied_clients))
-                ) %>% 
-  bind_rows()
-```
+data_credit_uti <- cohorts %>%
+    map(~ tibble(
+        cohort = .x,
+        applied_clients = rnorm(1, 100000, 10000),
+        utilize_prop = min(rnorm(1, 0.6, 0.1), 1),
+        utilize_client = round(utilize_prop * applied_clients)
+    )) %>%
+    bind_rows()
 
-```{r}
-fig <- plot_ly() %>% 
-  add_trace(data = data_credit_uti, x = ~cohort, y = ~applied_clients
-            , type='bar', name = '授信客户',  hovertemplate = '客群：%{x}<br>授信客户: %{y}<extra></extra>')
+fig <- plot_ly() %>%
+    add_trace(
+        data = data_credit_uti
+        , x = ~cohort
+        , y = ~applied_clients
+        , type = "bar"
+        , name = "# Clients"
+        , hovertemplate = "Approval Month：%{x}<br># Clients: %{y}<extra></extra>"
+        , marker = list(color = "#31688e")
+    )
 
 ay <- list(
-  overlaying = "y",
-  side = "right",
-  title = "用信比率")
+    overlaying = "y",
+    side = "right",
+    title = "credit utilization rate"
+)
 
-fig <- fig %>% add_trace(data = data_credit_uti, x = ~cohort, y = ~utilize_prop
-                         , name = "用信比率", yaxis = "y2", mode = "lines+markers"
-                         , type = "scatter"
-                         , hovertemplate = '客群：%{x}<br>用信比率: %{y:.0%}<extra></extra>')
+fig <- fig %>% add_trace(
+    data = data_credit_uti, x = ~cohort, y = ~utilize_prop,
+    name = "credit utilization rate", yaxis = "y2"
+    , mode = "lines+markers"
+    , mode = "lines"
+    , type = "scatter",
+    hovertemplate = "Approval Month：%{x}<br>util. rate: %{y:.0%}<extra></extra>"
+    # , marker = list(color = "#fde725")
+)
 
-fig <- fig %>% layout(
-  title = ""
-  , yaxis2 = ay,
-  xaxis = list(title=""),
-  yaxis = list(title="授信客户数")
-)%>%
-  layout(
-          xaxis = list(
-            zerolinecolor = '#ffff',
+fig <- fig %>%
+    layout(
+        title = "",
+        yaxis2 = ay,
+        xaxis = list(title = ""),
+        yaxis = list(title = "Approved Number of Clients")
+    ) %>%
+    layout(
+        xaxis = list(
+            zerolinecolor = "#ffff",
             zerolinewidth = 2,
-            gridcolor = 'ffff'),
-          yaxis = list(
-            zerolinecolor = '#ffff',
+            gridcolor = "ffff"
+        ),
+        yaxis = list(
+            zerolinecolor = "#ffff",
             zerolinewidth = 2,
-            gridcolor = 'ffff')
-          )
-# p <- plot_ly(x = c(1,2,3,4,5),
-#              y = c(0.5,0.7,0.6,0.9,0.8),
-#              type='bar',
-#              marker = list(color = 'red', opacity=1)
-#      )
-# 
-# add_trace(p,
-#           x = c(1,2,3,4,5),
-#           y = c(1,2,1.5,3,2),
-#           type='scatter',
-#           mode='lines+markers',
-#           line = list(color = 'black')
-#      )
+            gridcolor = "ffff"
+        )
+    )
+
 fig
 ```
 
-
-
-#### 用信时间
-
 ```{r}
-time_to_use = rchisq(sample(10000:50000, 1), 40) %>% round()
+time_to_use <- rchisq(sample(10000:50000, 1), 40) %>% round()
 
-plot_ly(x = time_to_use, type = 'histogram')
+plot_ly(x = time_to_use
+, type = "histogram"
+, marker = list(color = "#31688e"))
 ```
-
-
-
-
-### 模型效果
-
-```{r data_simulation}
-
-score <- rnorm(1000000, 600, 50) %>% round()
-
-calculate_good_probability <- function(score){
-  x <- log(2)/50*(score-300)
-  p <- exp(x)/(1+exp(x))
-  return(p)
-}
-
-behaviour <- score %>% map_int(~sample(c(0, 1), 1
-                                       , prob=c(calculate_good_probability(.x), 1-calculate_good_probability(.x))))
-
-simulated_data <- tibble(score=score, behaviour=behaviour) %>% 
-  filter(score>=500, score<=800) %>%
-  mutate(bin = cut_width(score, width=50)) 
-
-# head(simulated_data)
-```
-
-#### 分箱坏客户率单调性
-
-```{r plot_monotonicity}
-simulated_data %>% 
-  group_by(bin) %>% 
-  summarise(bad_rate = mean(behaviour), n = n()) %>%
-  ggplot(aes(x=bin)) +
-  geom_bar(aes(y=n), stat = 'identity', alpha=0.5) +
-  geom_line(aes(y=bad_rate*4000000, group=1))+
-  scale_y_continuous(
-    name = "客户数",
-    sec.axis = sec_axis(~ . /4000000, name = "坏客户率")
-  ) + xlab('') + theme_minimal()
-
-```
-
-#### KS
-
-```{r KS_plot}
-# Make two random #| samples
-sample1<-simulated_data %>% filter(behaviour==1) %>% pull(score)
-sample2<-simulated_data %>% filter(behaviour==0) %>% pull(score)
-
-# group <- c(rep("sample1", length(sample1)), rep("sample2", length(sample2)))
-# dat <- data.frame(KSD = c(sample1,sample2), group = group)
-cdf1 <- ecdf(sample1) 
-cdf2 <- ecdf(sample2) 
-
-minMax <- seq(min(sample1, sample2), max(sample1, sample2), length.out=length(sample1)) 
-x0 <- minMax[which( abs(cdf1(minMax) - cdf2(minMax)) == max(abs(cdf1(minMax) - cdf2(minMax))) )] 
-y0 <- cdf1(x0) 
-y1 <- cdf2(x0) 
-
-KS = max(abs(cdf1(minMax) - cdf2(minMax)))
-
-simulated_data <- simulated_data %>% 
-  mutate(client_type=factor(behaviour
-                            , levels = c(0, 1)
-                            , labels = c('好客户', '坏客户')))
-
-ggplot(simulated_data, aes(x = score, group = client_type, colour = client_type, linetype=client_type))+
-  stat_ecdf(size=1) +
-  ylab("Cumulitive Distibution") +
-  geom_segment(aes(x = x0[1], y = y0[1], xend = x0[1], yend = y1[1]),
-               linetype = "dashed", color = "red") +
-  geom_point(aes(x = x0[1] , y= y0[1]), color="red", size=1) +
-  geom_point(aes(x = x0[1] , y= y1[1]), color="red", size=1) +
-  ggtitle(paste0("K-S Test: ", round(KS, 3))) + xlab('')
-
-
-```
-
-
-#### AUC
-
-```{r}
-#load necessary packages
-library(ggplot2)
-library(pROC)
-
-#define object to plot
-rocobj <- roc(simulated_data$behaviour, simulated_data$score)
-
-auc <- round(auc(simulated_data$behaviour, simulated_data$score), 4)
-
-ggroc(rocobj, colour = 'steelblue', size = 1) +
-  ggtitle(paste0('ROC Curve ', '(AUC = ', auc, ')')) + 
-  theme_minimal()
-```
-
-## 业务分析的一些想法
-1. 可以借鉴time-of-event的分析框架，加入hazard rate的分析
-2. 借鉴人口学的lifetable、cohort analysis以及period analysis的分析，对一些比率进行分析
-        
-    2.1. [Lee-Carter模型](https://en.wikipedia.org/wiki/Lee%E2%80%93Carter_model)

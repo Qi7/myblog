@@ -1,0 +1,144 @@
+---
+title: "A Map of Total Fertility Rate of China"
+author: "Qi Wang"
+date: last-modified
+categories: ["visualization", "demography"]
+format: 
+  html
+execute: 
+  echo: true
+  warning: false
+  error: false
+  cache: false
+  freeze: auto
+toc: true
+toc-depth: 3
+number-sections: true
+---
+
+I don’t often create maps in my daily work, so I thought it would be a good idea to practice by making one. This blog is my attempt to create a map of China’s total fertility rate. This type of map is known as a **choropleth map**, where color shading represents data values—in this case, I used fill color to represent the total fertility rate at the provincial level. But what exactly is the total fertility rate?
+
+> The total fertility rate (TFR) of a population is the average number of children that are born to a woman over her lifetime, if they were to experience the exact current age-specific fertility rates (ASFRs) through their lifetime, and they were to live from birth until the end of their reproductive life. (source: [Wikipedia](https://en.wikipedia.org/wiki/Total_fertility_rate))
+
+I chose this indicator because low fertility poses a significant challenge for many East Asian countries. In China, the topic is widely discussed, and policies are being introduced to address declining birth rates. While I won’t delve into the issue in depth here, I’d like to share my process for creating this map. As usual, plotting turned out to be the easiest part—most of the effort went into data wrangling and transformation. Here’s a step-by-step guide to how I approached it.
+
+## the Map Data
+
+For the map, I searched for provincial map data of China and found JSON-format data from [simplemaps.com](https://simplemaps.com/gis/country/cn#admin1). Using R's `sf` package, it’s straightforward to read this data and then visualize the map with `geom_sf` in `ggplot2`.
+
+```{r data_map}
+#| label: tbl-map-data
+#| tbl-cap: First 5 Rows of the Map Data
+library(tidyverse)
+library(sf)
+library(knitr)
+
+sf_data <- st_read("cn.json", quiet = TRUE)
+kable(head(sf_data))
+```
+
+```{r raw_map}
+#| fig-cap: the Raw Map without Other Info
+#| label: fig-raw-map
+ggplot(sf_data) +
+  geom_sf(aes(fill = name), show.legend = FALSE) +
+  coord_sf()
+```
+
+## the Total Fertility Rate
+
+The total fertility rate data can be found on [Wikipedia](https://zh.wikipedia.org/zh-hans/中华人民共和国各省级行政区总和生育率表#数据来源). I’ll be using a web scraping method I recently learned from the [R for Data Science](https://r4ds.hadley.nz) book to retrieve this information. Here’s a tip: you can always turn to ChatGPT for labor-intensive and repetitive tasks. For example, I used it to create a one-to-one mapping between Chinese and English province names, saving me from having to type each one manually.
+
+```{r}
+#| echo: false
+Sys.setenv(ALL_PROXY = "socks5://127.0.0.1:1080") 
+```
+
+```{r scraping_data}
+#| label: tbl-fertility-data
+#| tbl-cap: Total Fertility Rate at Provincial Level
+library(rvest)
+
+# get the html data and parse it into a tibble
+html <- read_html("https://zh.wikipedia.org/zh-hans/中华人民共和国各省级行政区总和生育率表#数据来源")
+
+df_fertility <- html |> 
+    html_elements(".wikitable") |> 
+    html_table()
+df_fertility <- df_fertility[[1]]
+
+# map the province names from Chinese to English
+province_map <- c(
+  "北京市" = "Beijing Municipality",
+  "天津市" = "Tianjin Municipality",
+  "河北省" = "Hebei Province",
+  "山西省" = "Shanxi Province",
+  "内蒙古自治区" = "Inner Mongolia Autonomous Region",
+  "辽宁省" = "Liaoning Province",
+  "吉林省" = "Jilin Province",
+  "黑龙江省" = "Heilongjiang Province",
+  "上海市" = "Shanghai Municipality",
+  "江苏省" = "Jiangsu Province",
+  "浙江省" = "Zhejiang Province",
+  "安徽省" = "Anhui Province",
+  "福建省" = "Fujian Province",
+  "江西省" = "Jiangxi Province",
+  "山东省" = "Shandong Province",
+  "河南省" = "Henan Province",
+  "湖北省" = "Hubei Province",
+  "湖南省" = "Hunan Province",
+  "广东省" = "Guangdong Province",
+  "广西壮族自治区" = "Guangxi Zhuang Autonomous Region",
+  "海南省" = "Hainan Province",
+  "重庆市" = "Chongqing Municipality",
+  "四川省" = "Sichuan Province",
+  "贵州省" = "Guizhou Province",
+  "云南省" = "Yunnan Province",
+  "西藏自治区" = "Tibet Autonomous Region",
+  "陕西省" = "Shaanxi Province",
+  "甘肃省" = "Gansu province",
+  "青海省" = "Qinghai Province",
+  "宁夏回族自治区" = "Ningxia Hui Autonomous Region",
+  "新疆维吾尔自治区" = "Xinjiang Uygur Autonomous Region"
+)
+
+df_fertility <- df_fertility |> 
+  mutate(
+    province_en = recode(`地区`, !!!province_map)
+    , `1989/90` = parse_number(`1989/90`)
+    , `1995` = parse_number(`1995`)
+  )
+
+# transform the data into a long format
+df_fertility <- df_fertility |> 
+  pivot_longer(`1989/90`:`2020[1]`, names_to = "year", values_to = "total_fertility_rate")
+
+
+kable(df_fertility |> 
+  select(-`代码`) |> 
+  rename(province_cn = `地区`) |> 
+  filter(year == "2020[1]") |> 
+  drop_na())
+```
+
+## the Choropleth Map
+
+Now that we have the map data and the fertility rate data, we can merge them together and create the choropleth map. 
+```{r map_data_with_value}
+#| label: fig-fertility-map
+#| fig-cap: Total Fertility Rate at Provincial Level in 2020
+#| classes: preview-image
+
+sf_data <- sf_data |> 
+  left_join(df_fertility |> filter(year == "2020[1]") |> select(province_en, total_fertility_rate), by = c("name" = "province_en"))
+
+ggplot(sf_data) +
+  geom_sf(aes(fill = total_fertility_rate), show.legend = TRUE, color = "white") +
+  coord_sf() +
+  scale_fill_viridis_c(option = "D") +
+  theme_void() + 
+  labs(fill = "") +
+  theme(
+    legend.position = "left"
+  )
+```
