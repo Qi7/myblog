@@ -1,0 +1,238 @@
+---
+title: "How to Determine the Minimum Sample Size for an A/B Test?"
+author: "Qi Wang"
+date: 2024-12-20
+categories: ["statistics"]
+format: 
+  html
+execute: 
+  warning: false
+  error: false
+  cache: false
+  freeze: auto
+toc: true
+toc-depth: 3
+number-sections: true
+---
+
+I’m currently on the job hunt and preparing for interviews that involve experimental design and A/B testing. Initially, I found the formula for calculating the minimum sample size for A/B testing a bit daunting. However, after some drawing, calculations, and recalling basic statistics, I realized it’s actually quite manageable. So, I decided to write this blog to explain the formula—both as a reference for my future self and to help anyone else who might find it helpful.
+
+## My Shiny App for This Problem 
+
+I created a Shiny app to explore this problem. With the app, you can input your own parameters and experiment with different sample sizes to see how they impact the effectiveness of statistical tests. Check it out here: [Minimum Sample Size for A/B Testing](https://qiw57.shinyapps.io/minimum_sample_size_for_ab_testing/).
+
+
+## The Formula
+
+$$ n = \frac{\sigma^2}{\Delta^2}(z_{\alpha/2} + z_\beta)^2 $$
+
+So here,
+
+- $\sigma^2$ : The variance of the population, representing the spread of the population data around its mean.
+
+- $\Delta$ : The minimum detectable effect (MDE), which is the smallest difference between groups that the test aims to reliably detect.
+
+- $z_x$ : The critical value corresponding to the level  x , such that  $P(Z > z_x) = x$ , where  Z  follows a standard normal distribution ( $Z \sim N(0,1)$ ).
+
+The Statistical Test
+
+Here’s how we typically test whether there are significant differences between two groups, A and B. We compute the t-statistic using the formula:
+
+$$
+t = \frac{\bar{X}_A - \bar{X}_B}{\bar{\sigma}}
+$$
+
+Where  $\bar{X}_A$  and  $\bar{X}_B$  are the sample means of groups A and B, respectively, and  $\bar{\sigma}$  is the standard error.
+
+The null hypothesis states that there is no difference between the means of the two groups, i.e.,
+
+$$
+H_0: \mu_A = \mu_B
+$$
+
+The intuition behind this test is straightforward: if the difference between the group means is large enough, we can reject the null hypothesis. Under the null hypothesis, such a difference would be very unlikely, so instead of accepting it as a mere coincidence, we reject it. In doing so, we conclude that the distributions of population A and population B are significantly different.
+
+Let’s assume that Group A is the control group, representing the status quo, and Group B is the treatment group. In Statistics 101, we learned that the distribution of the sample mean is:
+
+$$
+\bar{X} \sim N\left(\mu, \frac {\sigma}{\sqrt{n}}\right)
+$$
+
+Intuitively, this means that as the sample size increases, the standard error (and hence the spread) of the sample mean  $\bar{X}$  decreases.
+
+```{r plot_dist}
+#| echo: false
+#| message: false
+#| label: fig-rejection
+#| fig-cap: "Standard Deviation and the Rejection Threshold"
+#| fig-subcap: 
+#|   - "large sample size"
+#|   - "small sample size"
+#| layout-ncol: 2
+
+library(ggplot2)
+library(tidyverse)
+library(ggpubr)
+
+plot_dist_rejection <- function(sd = 1){
+  mde <- 2
+
+transparancy <- 0.5
+
+alpha <- 0.05
+alpha_threshold <- qnorm(1 - alpha, 0, sd)
+
+beta <- 0.2
+beta_threshold <- qnorm(beta, mde, sd)
+
+eq <- function(x, mu = 0, sd = 1) {
+  dnorm(x, mu, sd)
+}
+
+label_y <- eq(0, sd = sd) * 1.02
+
+
+label_threshold_y <- eq(alpha_threshold, sd = sd) * 0.5
+
+
+lines <- tribble(
+  ~x, ~y, ~xend, ~yend, ~color,
+  0, 0, 0, eq(0, 0, sd), "#E38D2D",
+)
+
+base <- ggplot() +
+  xlim(-5, 5)
+
+p <- base +
+  geom_segment(
+    data = lines,
+    aes(x = x, xend = xend, y = y, yend = yend), color = lines$color, linewidth = 1
+  ) +
+  geom_function(fun = eq, args = list(mu = 0, sd = sd), color = "#E38D2D") +
+  stat_function(
+    fun = eq,
+    xlim = c(-5, alpha_threshold),
+    geom = "area",
+    args = list(mu = 0, sd = sd),
+    fill = "#E38D2D",
+    alpha = transparancy
+  ) +
+  annotate(
+    geom = "curve"
+    , x = alpha_threshold * 1.5
+    , y = label_threshold_y
+    , xend = alpha_threshold
+    , yend = label_threshold_y
+    , curvature = 0.2
+    , arrow = arrow(length = unit(2, "mm")
+    # , linewidth = .5
+    )
+  ) +
+  annotate(geom = "text", x = alpha_threshold * 1.5, y = label_threshold_y
+    , label = "rejection\nthreshold"
+    #  = z[alpha/2]*sigma"
+    , hjust = "left"
+    , parse = FALSE) +
+  labs(x = NULL, y = NULL) + 
+  theme_void() +
+  theme(
+    axis.text = element_blank(), # Remove axis labels
+    axis.ticks = element_blank() # Remove axis ticks
+  )
+  return(p)
+}
+
+plot_dist_rejection(0.7)
+plot_dist_rejection(1.5)
+
+```
+
+If we have a large number of samples, the rejection threshold for the mean statistic becomes smaller. As the threshold decreases, the power of the test increases, making it less likely to accept the null hypothesis when there is a true effect.
+
+## The Power and the Trade-offs Between Type I and Type II Errors
+
+Not finished. To be continued.
+
+```{r}
+#| echo: false
+#| message: false
+#| label: "fig-dist"
+#| fig-cap: "The Distributions of the means of the Controlled and Treated Groups"
+
+
+mde <- 2
+sd <- 0.7
+transparancy <- 0.5
+
+alpha <- 0.05
+alpha_threshold <- qnorm(1 - alpha, 0, sd)
+
+beta <- 0.2
+beta_threshold <- qnorm(beta, mde, sd)
+
+eq <- function(x, mu = 0, sd = 1) {
+  dnorm(x, mu, sd)
+}
+
+label_y <- eq(0, sd = sd) * 1.02
+
+
+lines <- tribble(
+  ~x, ~y, ~xend, ~yend, ~color,
+  0, 0, 0, eq(0, 0, sd), "#E38D2D",
+  mde, 0, mde, eq(mde, mde, sd), "#17807F"
+)
+
+base <- ggplot() +
+  xlim(-5, 5)
+
+base +
+  geom_segment(
+    data = lines,
+    aes(x = x, xend = xend, y = y, yend = yend), color = lines$color, linewidth = 1
+  ) +
+  geom_function(fun = eq, args = list(mu = 0, sd = sd), color = "#E38D2D") +
+  stat_function(
+    fun = eq,
+    xlim = c(-5, alpha_threshold),
+    geom = "area",
+    args = list(mu = 0, sd = sd),
+    fill = "#E38D2D",
+    alpha = transparancy
+  ) +
+  geom_function(fun = eq, args = list(mu = mde, sd = sd), color = "#17807F") +
+  stat_function(
+    fun = eq,
+    args = list(mu = mde, sd = sd),
+    fill = "#17807F",
+    alpha = transparancy,
+    geom = "area",
+    xlim = c(beta_threshold, 5)
+  ) +
+  geom_bracket(
+    xmin = 0, xmax = 2, y.position = label_y,
+    label = "minimum detectable effect"
+  ) +
+  annotate(
+    geom = "curve"
+    , x = -2.5
+    , y = 0.1
+    , xend = alpha_threshold
+    , yend = .1
+    , curvature = 0.2
+    , arrow = arrow(length = unit(2, "mm")
+    # , linewidth = .5
+    )
+  ) +
+  annotate(geom = "text", x = -2.7, y = .1
+    , label = "rejection threshold"
+    #  = z[alpha/2]*sigma"
+    , hjust = "right"
+    , parse = FALSE) +
+  labs(x = NULL, y = NULL) + theme_pubclean()
+#   theme(
+#     axis.text = element_blank(), # Remove axis labels
+#     axis.ticks = element_blank() # Remove axis ticks
+#   )
+
+```

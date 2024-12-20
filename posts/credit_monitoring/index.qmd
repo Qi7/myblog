@@ -1,7 +1,7 @@
 ---
 title: "Monitoring a Credit Business"
 author: "Qi Wang"
-date: last-modified
+date: 2024-11-10
 categories: ["credit risk", "monitoring"]
 format: 
   html:
@@ -21,18 +21,18 @@ number-sections: true
 
 ## Data Generating Process
 
-The first thing when starting analyzing data from one specific domain, is to know the data generating process. That is why we need to have domain knowledge or seek help from subject matter experts. Lending and borrowing are very common activities in daily life and business world. To better understand what kind of data we are going to deal with, I drew a diagram to show a simplified data generating process in @fig-DGP.
+The first step in analyzing data from any specific domain is understanding the data-generating process. This is why having domain knowledge or consulting subject matter experts is crucial. Lending and borrowing are common activities in both everyday life and the business world. To provide a clearer understanding of the data we will be working with, I created a diagram to illustrate a simplified data-generating process, as shown in @fig-DGP.
 
 ![Simplified Data Genrating Process](DGP.svg){width=80% .lightbox .border #fig-DGP}
 
-During application, applicants features like demographic characteristics, socioeconomic characteristics and other relevant data are used to evaluate their creditworthiness. Disqualified applicants will be rejecter. For those accepted applicants, a price (interest rate) and credit line amount will be assigned to them. After becoming a client with credits, they can use the them according to the agreement between the bank and the clients. But most commonly, we observe and record two types of actions, borrowing and paying back.
+During the application process, applicants’ features—such as demographic characteristics, socioeconomic factors, and other relevant data—are analyzed to assess their creditworthiness. Applicants who do not meet the criteria are rejected. For those who are approved, a credit line and an interest rate are assigned based on their evaluation. Once clients are granted credit, they can utilize it in accordance with the agreement established between the bank and themselves. Typically, we track and record two key actions: borrowing and repayment.
 
-For those rejected clients, we will never know their counter factual behaviour if they get the credit. They only appear in the data analysis of the application process, maily the rejection rates of the current application strategy, the distributions of the triggered rejected reasons, etc.
+For rejected applicants, their potential behavior had they been granted credit remains unknown. These individuals are only included in data analyses related to the application process, such as calculating rejection rates under the current approval strategy and examining the distribution of the reasons that triggered their rejection.
 
 
 ## Monitor the Application Process
 
-An overview of the rejection data. The reject process always takes several steps. An applicant might go through several decision engines. In my example, I simulated the data so that it represents a process that the application first goes through the anti-fraud engine, then if passed, they will go through the strategy engine. It can reduce the need to fetch the downstream data for those rejected applicants, hence saving the cost to buy the data. (Yes, data is not free.)
+The rejection process typically involves multiple steps. An applicant may pass through several decision engines during evaluation. In this example, I simulated data to represent a process where applications first go through an anti-fraud engine. Only if they pass this initial step are they then evaluated by a strategy engine. This approach minimizes the need to retrieve downstream data for rejected applicants, thereby reducing the cost of acquiring additional data (because yes, data is not free).
 
 ```{r passrate}
 library(tidyverse)
@@ -115,7 +115,7 @@ fig <- plot_ly(
 fig
 ```
 
-So when we see the pass rate fluctuate significantly, we may want to zoom in to see the reject reasons for each period.
+When we observe significant fluctuations in the pass rate, it’s essential to zoom in and analyze the rejection reasons for each specific period.
 
 ```{r reject_reasons}
 t_reject_reason_count <- t_reject_reasons %>%
@@ -167,7 +167,7 @@ filtered_data = transpose(reject_reason).filter((d) => d.month === select_month)
 
 ### Model Score Distribution
 
-Another way to check the quality of the incoming clients is to check the distribution of the model score or some important features. Basically, all scores that asess the clients' credit worthiness are just some way to reduce the dimensionality of the features we can get for that person and map them into a one-dimension scalar number. So we can compare two clients simply by ranking their scores. Assuming we have a model that is effective, we can be alarmed earlier whether there is a significant credit worthiness drift in our client base.
+Another way to assess the quality of incoming clients is by examining the distribution of model scores or key features. In essence, all creditworthiness scores are methods of reducing the dimensionality of a client’s features, condensing them into a single scalar value. This allows us to compare clients by simply ranking their scores. Assuming the model is effective, monitoring these scores can provide an early warning of significant shifts in the creditworthiness of our client base.
 
 
 ```{r violin_plot}
@@ -209,11 +209,11 @@ ggplotly(p_boxplot)
 
 ## Monitor Client Behaviour Data
 
-To be continued, I will introduce the main metrics used to assess the health of the credit business, like vintage, rolling rate and so on.
+The primary metrics used to evaluate the health of a credit business include indicators such as vintage analysis, rolling rates, and others. However, an important initial question to consider is: do all clients with a credit line actually utilize their credit to borrow?
 
 ### When to Use the Credit
 
-We give out credit to clients based on their creditworthiness. But not every client is going to use them. We need to monitor the credit utilization rate to see if the business is healthy.
+Credit is extended to clients based on their assessed creditworthiness. However, not all clients will utilize their available credit. Monitoring the credit utilization rate is crucial for evaluating the overall health of the business.
 
 ```{r}
 data_credit_uti <- cohorts %>%
@@ -272,7 +272,8 @@ fig <- fig %>%
 fig
 ```
 
-How long will a client start to use the credit after approval? We can use check the distribution to have a general idea. You can always refine it by split the data into more detailed groups, such as approval months.
+How long does it take for a client to start using their credit after approval? To get a general sense, we can examine the distribution of credit usage. This can be further refined by splitting the data into more detailed groups, such as by approval month.
+
 ```{r}
 time_to_use <- rchisq(sample(10000:50000, 1), 40) %>% round()
 
@@ -281,13 +282,13 @@ plot_ly(x = time_to_use, type = "histogram", marker = list(color = "#443983"))
 
 ### How is the Default Situation
 
-The main risk of the credit business is the default. If we do not take time value into account, the final profit can be affected by the probability of default (PD) a lot.
+The primary risk in the credit business is default. If we do not account for the time value of money, the final profit can be significantly impacted by the probability of default (PD).
 
 $$profit = principal \cdot [(1-PD) \cdot i\% - c\% - PD \cdot (1 - r\%)]$$
 
-#### Vintage
+#### Vintage Analysis
 
-We need to monitor it closely to prevent any avoidable loss. One way to measure the default risk is the vintage analysis. It is a concept borrowed from enology. The loans issued in different periods or under different strategies can progress differently in regards to default rate. The overall shape are always increase generally then flatten out when the loans become mature until all the loans are settled.
+It’s essential to closely monitor default risks to prevent avoidable losses. One common method for assessing this risk is vintage analysis, a concept borrowed from enology. Loans issued during different periods or under different strategies can show varying default rates over time. Generally, the default rate increases initially, then flattens out as the loans mature, until all loans are eventually settled.
 
 ```{r tanh}
 gen_vintage_data <- function(cohort_name){
@@ -309,7 +310,7 @@ ggplotly(vintage_plot)
 
 #### Rolling Rate
 
-The vintage fixes the cohort and shows the progressiong along time. The rolling rate measures how the accounts swtich between different states in a fixed period of time. For example, we can measure which proportion of accouns that have already got state M1 (overdue days between 1 and 29 days) will deteriorate to the next state M2 (overdue days between 30 days and 59 days) 30 days later. In observations, the longer a client has defaulted, the less probable he/she will repay the debt. So generally, you will see the rolling rates increase as the states worsen.
+While vintage analysis tracks the progression of a cohort over time, the rolling rate measures how accounts transition between different states within a fixed period. For example, we can assess the proportion of accounts that have reached state M1 (1 to 29 days overdue) and how many of them will deteriorate to state M2 (30 to 59 days overdue) after 30 days. From observations, the longer a client remains in default, the less likely they are to repay the debt. As a result, rolling rates typically increase as the severity of the default status worsens.
 
 ```{r migration_rate}
 n <- length(cohorts)
@@ -349,11 +350,11 @@ Plot.plot({
 
 ## Monitor the Effectiveness of the Model Scores
 
-We have a lot of scores to measure clients' credit worthiness during the application and credit using processes, like application score or behaviour score. When we construct our models, we will evaluate the performance of our models by metrics like accuracy, ROC AUC, KS etc. After deployment, it is essential to monitor how well the scores generalize to unseen real-life clients. As we have seen above, our new clients need some time to interact with our business and show whether they are good clients or bad clients by their borrowing and paying back behaviours. 
+In the credit evaluation process, various scores—such as application scores and behavior scores—are used to assess clients’ creditworthiness during both the application and usage phases. During model development, performance is typically evaluated using metrics like accuracy, ROC AUC, and KS. However, post-deployment, it’s crucial to monitor how well these scores generalize to unseen, real-world clients. As mentioned earlier, new clients require time to interact with the business and demonstrate their creditworthiness through borrowing and repayment behaviors. In the meantime, we can begin by analyzing score distributions to identify any emerging patterns or anomalies.
 
 ### Score Stability
 
-But first, we can monitor the distribution of the scores of new applicants to see if there is any significant drift of our client profiles. If it is drifting too much from the training data, we should be alarmed and consider if there is any need to retrain.
+Once a model is deployed, it’s essential to ensure that the data used for serving remains consistent with the data used during training. This is critical for addressing the training-serving skew issue in MLOps. A useful way to monitor this consistency is by analyzing the distribution of scores for new applicants. If significant drift is detected in client profiles, it should serve as a warning sign, prompting a review to assess whether model retraining is necessary.
 
 ```{r echo=FALSE}
 df_score = bind_rows(df_score, tibble(month='benchmark'
@@ -411,9 +412,9 @@ Plot.plot({
 
 ::::
 
-### Does the Default Rate Show Monotonicy with the Score?
+### Does the Default Rate Show Monotonicity with the Score?
 
-The least requirement for a score is that the default rate should decrease as the score increase so it is effective to rank clients by their credit risk.
+The minimum requirement for a score is that the default rate should decrease as the score increases. This ensures that the score effectively ranks clients by their credit risk.
 
 ```{r data_simulation}
 
@@ -462,7 +463,7 @@ simulated_data %>%
 
 ### Are Performance Metrics Declining after Deployment?
 
-Just like what we do during our training process, we still need to calculate the metrics on the new data accummulated from production system. If the KS or AUC metrics are deteriorating, it's time to rethink if the model should still be used to assess the new clienteles.
+Similar to the training process, it’s important to calculate performance metrics on the new data accumulated from the production system. If metrics such as KS or AUC are deteriorating, it’s time to reconsider whether the model should continue being used to assess new clients.
 
 #### KS
 
@@ -519,20 +520,20 @@ ggroc(rocobj, colour = "#443983", size = 1) +
   theme_minimal()
 ```
 
-## the Similarity between Credit Data and Demography
+## The Similarity Between Credit Data and Demographics
 
-I found the process of anlysing the credit data is similar to the analysis of the demographic data. I have expeience in demographic research and used survival models, multistate models in my research. It occurs to me that some of the techniques used in demographic analysis may be applicable to the credit data.
+I’ve found that analyzing credit data is similar to analyzing demographic data. With my experience in demographic research, where I’ve used survival models and multistate models, it occurred to me that some of the techniques used in demographic analysis could also be applied to credit data.
 
-### Business Expanding or Contracting
+### Business Expansion or Contraction
 
-Nowadays as the economy is decelerating in China, we see the amount of money lent is decreasing too. For one single product or business, if we analyze the loan tenure distribution of current balance, you will see if the business is prospering or shrinking.
+As the economy slows in China, we are witnessing a decline in the amount of money being lent. For any given product or business, analyzing the loan tenure distribution of the current balance can provide insights into whether the business is expanding or contracting—similar to how demographers interpret population pyramids.
 
 ![Population Pyramid Example](https://user-images.githubusercontent.com/68678549/103846423-02cc4980-50d9-11eb-8c31-964d5cc1f7b8.png)
 
 ### Risk Increasing or Decreasing
 
-Other tools to analyze mortality rates (a defaulted loan is like a dying person, the only difference is the loan has some chance to get repayed someday in the futrue) like lifetables, cohort analysis and period analysis, I can already see some of their equivalents in credit analysis. Can I use [Lee-Carter Models](https://en.wikipedia.org/wiki/Lee%E2%80%93Carter_model) to decompose the cohort and period trends of default risks?
+In demographic analysis, tools used to analyze mortality rates—such as life tables, cohort analysis, and period analysis—offer parallels in credit analysis. For example, a defaulted loan can be likened to a deceased person, with the key difference being that a loan has some chance of being repaid in the future. I can already see how these demographic techniques have equivalents in credit analysis. This leads me to wonder: Can I apply [Lee-Carter Models](https://en.wikipedia.org/wiki/Lee%E2%80%93Carter_model) to decompose the cohort and period trends in default risk?
 
 ### Hazard Rate
 
-In credit models, we always first define the status `default` by analysing the data first. Then we would define a client as a bad if they have a maximum overdue days greater than 30 days in a 6-month period after the loan is issued. But in demographic research, we always analyze the `hazard rate` to transit to other state. We already have a toolbox of suvival models (or time-of-event models, multistate models) under our belt, just switch the data and I bebieve there will be some interesting results.
+In credit models, we typically begin by defining the “default” status through data analysis. A client is considered “bad” if they have more than 30 days of overdue payments within a 6-month period after the loan is issued. In demographic research, however, the focus is on analyzing the “hazard rate” to assess transitions between different states. With a solid toolbox of survival models (or time-to-event models, multistate models) at our disposal, I believe that by simply switching the data, we could uncover some interesting results in credit analysis as well.

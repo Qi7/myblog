@@ -1,7 +1,7 @@
 ---
 title: "A Map of Total Fertility Rate of China"
 author: "Qi Wang"
-date: last-modified
+date: 2024-11-17
 categories: ["visualization", "demography"]
 format: 
   html
@@ -130,15 +130,50 @@ Now that we have the map data and the fertility rate data, we can merge them tog
 #| classes: preview-image
 
 sf_data <- sf_data |> 
-  left_join(df_fertility |> filter(year == "2020[1]") |> select(province_en, total_fertility_rate), by = c("name" = "province_en"))
+  left_join(df_fertility |> filter(year == "2020[1]") |> select(province_en, total_fertility_rate, `地区`), by = c("name" = "province_en"))
+
+library(showtext)
+showtext_auto()
 
 ggplot(sf_data) +
   geom_sf(aes(fill = total_fertility_rate), show.legend = TRUE, color = "white") +
-  coord_sf() +
+  coord_sf(xlim = c(75, 140)) +
+  ggrepel::geom_label_repel(
+    data = . %>% slice_min(order_by = total_fertility_rate, n = 3), 
+    aes(geometry = geometry, label = paste0(name, "\n", round(total_fertility_rate, 2)))
+    , label.size = .2
+    , stat = "sf_coordinates"
+    , min.segment.length = 0
+    , segment.size = .2
+    , show.legend = FALSE
+    , lineheight = 0.85
+    , box.padding = 0.5, xlim = c(130, 160)
+    , size = 2) +
+  ggrepel::geom_label_repel(
+    data = . %>% slice_max(order_by = total_fertility_rate, n = 3), 
+    aes(geometry = geometry, label = paste0(name, "\n", round(total_fertility_rate, 2)))
+    , label.size = .2
+    , stat = "sf_coordinates"
+    , min.segment.length = 0
+    , segment.size = .2
+    , show.legend = FALSE
+    , lineheight = 0.85
+    , box.padding = 0.5, xlim = c(80, 100)
+    , size = 2) +
   scale_fill_viridis_c(option = "D") +
   theme_void() + 
-  labs(fill = "") +
+  labs(fill = ""
+    , caption = 'Data Source：https://zh.wikipedia.org/zh-hans/中华人民共和国各省级行政区总和生育率表#数据来源'
+    , title = "Total Fertility Rate by Provincial-Level Administrative Regions (2020)"
+    , subtitle = "The Total Fertility Rate, often referred to simply as the fertility rate, reflects the total number of children \na woman is expected to bear over her lifetime." ) +
   theme(
     legend.position = "left"
-  )
+    , plot.title.position = "plot"
+    , plot.title = element_text(color = "#333333", size = 16)
+    , plot.subtitle = element_text(color = "#333333", size = 10)
+    , plot.caption = element_text(color = "#333333", size = 9)
+    , legend.key.size = unit(15, "pt")
+    , legend.text = element_text(size = 10)
+    , legend.text.align = 1
+  ) + guides(fill = guide_colourbar(label.position = "left"))
 ```
